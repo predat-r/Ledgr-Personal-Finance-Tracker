@@ -1,0 +1,307 @@
+@page "/transactions"
+@page "/transactions/{page:int}"
+
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+
+<PageTitle>Transactions - Ledgr</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Transactions</h1>
+        <a href="transactions/add" class="btn btn-primary">
+            <Icon Name="IconName.Add" /> Add Transaction
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <DateEdit @bind-Date="startDate" Placeholder="Select start date" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <DateEdit @bind-Date="endDate" Placeholder="Select end date" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Type</label>
+                    <Select @bind-SelectedValue="filterType" ValueChanged="OnFilterChanged">
+                        <SelectItem Value="(TransactionType?)null">All</SelectItem>
+                        <SelectItem Value="TransactionType.Income">Income</SelectItem>
+                        <SelectItem Value="TransactionType.Expense">Expense</SelectItem>
+                    </Select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Category</label>
+                    <Select @bind-SelectedValue="filterCategoryId" ValueChanged="OnFilterChanged">
+                        <SelectItem Value="(int?)null">All Categories</SelectItem>
+                        @foreach (var category in categories)
+                        {
+                            <SelectItem Value="category.Id">@category.Name</SelectItem>
+                        }
+                    </Select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <Button Color="Color.Secondary" Clicked="ClearFilters" Block="true">
+                        <Icon Name="IconName.Clear" /> Clear
+                    </Button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card">
+        <div class="card-body">
+            @if (isLoading)
+            {
+                <div class="loading-spinner">
+                    <Spinner Color="Primary" Size="Style.Width.Rem(3)" />
+                </div>
+            }
+            else if (!transactions.Any())
+            {
+                <div class="text-center py-5">
+                    <Icon Name="IconName.Inbox" Size="Blazorise.IconSize.FontSize4x" Class="text-muted mb-3" />
+                    <h4 class="text-muted">No transactions found</h4>
+                    <p class="text-muted">Start by adding your first transaction.</p>
+                    <a href="transactions/add" class="btn btn-primary">Add Transaction</a>
+                </div>
+            }
+            else
+            {
+                <Table Hoverable="true" Responsive="true">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHeaderCell>Date</TableHeaderCell>
+                            <TableHeaderCell>Description</TableHeaderCell>
+                            <TableHeaderCell>Category</TableHeaderCell>
+                            <TableHeaderCell>Type</TableHeaderCell>
+                            <TableHeaderCell>Amount</TableHeaderCell>
+                            <TableHeaderCell>Actions</TableHeaderCell>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        @foreach (var transaction in paginatedTransactions)
+                        {
+                            <TableRow>
+                                <TableRowCell>@transaction.Date.ToString("MMM dd, yyyy")</TableRowCell>
+                                <TableRowCell>
+                                    <div>@transaction.Description</div>
+                                    @if (!string.IsNullOrEmpty(transaction.Notes))
+                                    {
+                                        <small class="text-muted">@transaction.Notes</small>
+                                    }
+                                </TableRowCell>
+                                <TableRowCell>
+                                    <span class="category-dot" style="background-color: @transaction.Category?.Color"></span>
+                                    @transaction.Category?.Name
+                                </TableRowCell>
+                                <TableRowCell>
+                                    <Badge Color="@(transaction.Type == TransactionType.Income ? Color.Success : Color.Danger)">
+                                        @transaction.Type
+                                    </Badge>
+                                </TableRowCell>
+                                <TableRowCell>
+                                    <span class="@(transaction.Type == TransactionType.Income ? "transaction-income" : "transaction-expense")">
+                                        @(transaction.Type == TransactionType.Income ? "+" : "-")@transaction.Amount.ToString("C")
+                                    </span>
+                                </TableRowCell>
+                                <TableRowCell>
+                                    <Buttons>
+                                        <Button Color="Color.Info" Clicked="() => EditTransaction(transaction.Id)" Size="Size.Small">
+                                            <Icon Name="IconName.Edit" />
+                                        </Button>
+                                        <Button Color="Color.Danger" Clicked="() => ShowDeleteModal(transaction)" Size="Size.Small">
+                                            <Icon Name="IconName.Delete" />
+                                        </Button>
+                                    </Buttons>
+                                </TableRowCell>
+                            </TableRow>
+                        }
+                    </TableBody>
+                </Table>
+
+                <!-- Pagination -->
+                @if (totalPages > 1)
+                {
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div>
+                            Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, totalCount) of @totalCount entries
+                        </div>
+                        <Pagination>
+                            <PaginationItem Disabled="currentPage == 1">
+                                <PaginationLink Page="1">First</PaginationLink>
+                            </PaginationItem>
+                            <PaginationItem Disabled="currentPage == 1">
+                                <PaginationLink Page="@(currentPage - 1)">Previous</PaginationLink>
+                            </PaginationItem>
+                            @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                            {
+                                <PaginationItem Active="i == currentPage">
+                                    <PaginationLink Page="@i">@i</PaginationLink>
+                                </PaginationItem>
+                            }
+                            <PaginationItem Disabled="currentPage == totalPages">
+                                <PaginationLink Page="@(currentPage + 1)">Next</PaginationLink>
+                            </PaginationItem>
+                            <PaginationItem Disabled="currentPage == totalPages">
+                                <PaginationLink Page="@totalPages">Last</PaginationLink>
+                            </PaginationItem>
+                        </Pagination>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<Modal @bind-Visible="showDeleteModal">
+    <ModalContent Centered="true">
+        <ModalHeader>
+            <ModalTitle>Delete Transaction</ModalTitle>
+            <CloseButton />
+        </ModalHeader>
+        <ModalBody>
+            <p>Are you sure you want to delete this transaction?</p>
+            @if (transactionToDelete != null)
+            {
+                <div class="alert alert-warning">
+                    <strong>@transactionToDelete.Description</strong><br />
+                    @transactionToDelete.Amount.ToString("C") - @transactionToDelete.Date.ToString("MMM dd, yyyy")
+                </div>
+            }
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Secondary" Clicked="CloseDeleteModal">Cancel</Button>
+            <Button Color="Color.Danger" Clicked="ConfirmDelete">
+                <Icon Name="IconName.Delete" /> Delete
+            </Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    [Inject] private ITransactionService TransactionService { get; set; } = null!;
+    [Inject] private ICategoryService CategoryService { get; set; } = null!;
+    [Inject] private AuthenticationStateProvider AuthState { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    [Parameter] public int page { get; set; } = 1;
+
+    private bool isLoading = true;
+    private List<Transaction> transactions = new();
+    private List<Transaction> paginatedTransactions = new();
+    private List<Category> categories = new();
+
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private TransactionType? filterType;
+    private int? filterCategoryId;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount;
+    private int totalPages;
+
+    private bool showDeleteModal;
+    private Transaction? transactionToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+        await LoadTransactions();
+        isLoading = false;
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await CategoryService.GetAllCategoriesAsync();
+    }
+
+    private async Task LoadTransactions()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            var allTransactions = await TransactionService.GetUserTransactionsAsync(userId);
+
+            // Apply filters
+            if (startDate.HasValue)
+                allTransactions = allTransactions.Where(t => t.Date >= startDate.Value).ToList();
+            if (endDate.HasValue)
+                allTransactions = allTransactions.Where(t => t.Date <= endDate.Value).ToList();
+            if (filterType.HasValue)
+                allTransactions = allTransactions.Where(t => t.Type == filterType.Value).ToList();
+            if (filterCategoryId.HasValue)
+                allTransactions = allTransactions.Where(t => t.CategoryId == filterCategoryId.Value).ToList();
+
+            transactions = allTransactions;
+            totalCount = transactions.Count;
+            totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            if (currentPage > totalPages && totalPages > 0)
+                currentPage = totalPages;
+
+            var skip = (currentPage - 1) * pageSize;
+            paginatedTransactions = transactions.Skip(skip).Take(pageSize).ToList();
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        currentPage = 1;
+        await LoadTransactions();
+    }
+
+    private async Task ClearFilters()
+    {
+        startDate = null;
+        endDate = null;
+        filterType = null;
+        filterCategoryId = null;
+        currentPage = 1;
+        await LoadTransactions();
+    }
+
+    private void EditTransaction(int id)
+    {
+        Navigation.NavigateTo($"/transactions/edit/{id}");
+    }
+
+    private void ShowDeleteModal(Transaction transaction)
+    {
+        transactionToDelete = transaction;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        transactionToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (transactionToDelete != null)
+        {
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await TransactionService.DeleteTransactionAsync(transactionToDelete.Id, userId);
+                await LoadTransactions();
+            }
+        }
+
+        CloseDeleteModal();
+    }
+}
