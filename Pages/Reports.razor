@@ -1,0 +1,366 @@
+@page "/reports"
+
+@using Microsoft.AspNetCore.Authorization
+@using ChartJs.Blazor.PieChart
+@using ChartJs.Blazor.LineChart
+@using ChartJs.Blazor.BarChart
+
+@attribute [Authorize]
+
+<PageTitle>Reports - Ledgr</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Financial Reports</h1>
+
+    <!-- Date Range Selector -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <DateEdit @bind-Date="startDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <DateEdit @bind-Date="endDate" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <Button Color="Color.Primary" Clicked="LoadReportData" Block="true">
+                        <Icon Name="IconName.Refresh" /> Generate Report
+                    </Button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <Spinner Color="Primary" Size="Style.Width.Rem(3)" />
+        </div>
+    }
+    else
+    {
+        <!-- Summary Stats -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card income">
+                    <div class="stats-label">Total Income</div>
+                    <div class="stats-value">@totalIncome.ToString("C")</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card expenses">
+                    <div class="stats-label">Total Expenses</div>
+                    <div class="stats-value">@totalExpenses.ToString("C")</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card balance">
+                    <div class="stats-label">Net Savings</div>
+                    <div class="stats-value">@((totalIncome - totalExpenses).ToString("C"))</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="stats-label">Savings Rate</div>
+                        <div class="stats-value" style="color: @(savingsRate >= 0 ? "#28a745" : "#dc3545")">
+                            @savingsRate.ToString("F1")%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Expenses by Category</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (expenseChartData?.Labels.Any() == true)
+                        {
+                            <Chart Config="expensePieConfig"></Chart>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No expense data for this period</p>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Income by Category</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (incomeChartData?.Labels.Any() == true)
+                        {
+                            <Chart Config="incomePieConfig"></Chart>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No income data for this period</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Trends -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Monthly Trends (Last 6 Months)</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (monthlyTrends.Any())
+                        {
+                            <Chart Config="trendBarConfig"></Chart>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No data available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction Summary Table -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Category Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <Table Hoverable="true" Responsive="true">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHeaderCell>Category</TableHeaderCell>
+                                    <TableHeaderCell>Type</TableHeaderCell>
+                                    <TableHeaderCell>Transactions</TableHeaderCell>
+                                    <TableHeaderCell>Total</TableHeaderCell>
+                                    <TableHeaderCell>% of Total</TableHeaderCell>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                @foreach (var category in categorySummary)
+                                {
+                                    <TableRow>
+                                        <TableRowCell>
+                                            <span class="category-dot" style="background-color: @category.Color"></span>
+                                            @category.Name
+                                        </TableRowCell>
+                                        <TableRowCell>
+                                            <Badge Color="@(category.Type == CategoryType.Income ? Color.Success : Color.Danger)">
+                                                @category.Type
+                                            </Badge>
+                                        </TableRowCell>
+                                        <TableRowCell>@category.TransactionCount</TableRowCell>
+                                        <TableRowCell>
+                                            <span class="@(category.Type == CategoryType.Income ? "transaction-income" : "transaction-expense")">
+                                                @category.Total.ToString("C")
+                                            </span>
+                                        </TableRowCell>
+                                        <TableRowCell>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                                    <div class="progress-bar" style="width: @category.Percentage%; background-color: @category.Color;">
+                                                    </div>
+                                                </div>
+                                                @category.Percentage.ToString("F1")%
+                                            </div>
+                                        </TableRowCell>
+                                    </TableRow>
+                                }
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private IChartService ChartService { get; set; } = null!;
+    [Inject] private ITransactionService TransactionService { get; set; } = null!;
+    [Inject] private AuthenticationStateProvider AuthState { get; set; } = null!;
+
+    private DateTime startDate = DateTime.UtcNow.AddMonths(-1);
+    private DateTime endDate = DateTime.UtcNow;
+
+    private bool isLoading = true;
+    private decimal totalIncome;
+    private decimal totalExpenses;
+    private decimal savingsRate;
+
+    private ChartData? expenseChartData;
+    private ChartData? incomeChartData;
+    private PieConfig? expensePieConfig;
+    private PieConfig? incomePieConfig;
+    private BarConfig? trendBarConfig;
+
+    private List<(string Month, decimal Income, decimal Expenses)> monthlyTrends = new();
+
+    private List<CategorySummaryItem> categorySummary = new();
+
+    private class CategorySummaryItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public CategoryType Type { get; set; }
+        public decimal Total { get; set; }
+        public int TransactionCount { get; set; }
+        public decimal Percentage { get; set; }
+        public string Color { get; set; } = "#6c757d";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportData();
+    }
+
+    private async Task LoadReportData()
+    {
+        isLoading = true;
+
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            // Get totals
+            totalIncome = await TransactionService.GetTotalIncomeAsync(userId, startDate, endDate);
+            totalExpenses = await TransactionService.GetTotalExpensesAsync(userId, startDate, endDate);
+            savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+
+            // Get expense chart data
+            expenseChartData = await ChartService.GetExpensesByCategoryAsync(userId, startDate, endDate);
+            SetupExpensePieChart();
+
+            // Get income chart data
+            incomeChartData = await ChartService.GetIncomeByCategoryAsync(userId, startDate, endDate);
+            SetupIncomePieChart();
+
+            // Get monthly trends
+            monthlyTrends = await ChartService.GetMonthlyTrendsAsync(userId, 6);
+            SetupTrendBarChart();
+
+            // Get category summary
+            await LoadCategorySummary(userId);
+        }
+
+        isLoading = false;
+    }
+
+    private void SetupExpensePieChart()
+    {
+        if (expenseChartData == null || !expenseChartData.Labels.Any()) return;
+
+        expensePieConfig = new PieConfig
+        {
+            Options = new PieOptions
+            {
+                Responsive = true,
+                MaintainAspectRatio = false,
+                Legend = new Legend { Position = LegendPosition.Right }
+            }
+        };
+
+        expensePieConfig.Data.Labels = expenseChartData.Labels;
+        expensePieConfig.Data.Datasets.Add(new PieDataset
+        {
+            Data = expenseChartData.Data.Select(d => (double)d).ToList(),
+            BackgroundColor = expenseChartData.Colors,
+            BorderWidth = 2
+        });
+    }
+
+    private void SetupIncomePieChart()
+    {
+        if (incomeChartData == null || !incomeChartData.Labels.Any()) return;
+
+        incomePieConfig = new PieConfig
+        {
+            Options = new PieOptions
+            {
+                Responsive = true,
+                MaintainAspectRatio = false,
+                Legend = new Legend { Position = LegendPosition.Right }
+            }
+        };
+
+        incomePieConfig.Data.Labels = incomeChartData.Labels;
+        incomePieConfig.Data.Datasets.Add(new PieDataset
+        {
+            Data = incomeChartData.Data.Select(d => (double)d).ToList(),
+            BackgroundColor = incomeChartData.Colors,
+            BorderWidth = 2
+        });
+    }
+
+    private void SetupTrendBarChart()
+    {
+        if (!monthlyTrends.Any()) return;
+
+        trendBarConfig = new BarConfig
+        {
+            Options = new BarOptions
+            {
+                Responsive = true,
+                MaintainAspectRatio = false,
+                Scales = new BarScales
+                {
+                    Y = new LinearAxis
+                    {
+                        BeginAtZero = true,
+                        Title = new AxisTitle { Display = true, Text = "Amount ($)" }
+                    }
+                }
+            }
+        };
+
+        trendBarConfig.Data.Labels = monthlyTrends.Select(t => t.Month).ToList();
+        
+        trendBarConfig.Data.Datasets.Add(new BarDataset<double>
+        {
+            Label = "Income",
+            Data = monthlyTrends.Select(t => (double)t.Income).ToList(),
+            BackgroundColor = "#28a745"
+        });
+
+        trendBarConfig.Data.Datasets.Add(new BarDataset<double>
+        {
+            Label = "Expenses",
+            Data = monthlyTrends.Select(t => (double)t.Expenses).ToList(),
+            BackgroundColor = "#dc3545"
+        });
+    }
+
+    private async Task LoadCategorySummary(string userId)
+    {
+        var transactions = await TransactionService.GetUserTransactionsByDateRangeAsync(userId, startDate, endDate);
+        var totalAmount = transactions.Sum(t => t.Amount);
+
+        categorySummary = transactions
+            .GroupBy(t => new { t.Category?.Name, t.Category?.Color, t.Type })
+            .Select(g => new CategorySummaryItem
+            {
+                Name = g.Key.Name ?? "Unknown",
+                Type = g.Key.Type,
+                Total = g.Sum(t => t.Amount),
+                TransactionCount = g.Count(),
+                Percentage = totalAmount > 0 ? (g.Sum(t => t.Amount) / totalAmount) * 100 : 0,
+                Color = g.Key.Color ?? "#6c757d"
+            })
+            .OrderByDescending(c => c.Total)
+            .ToList();
+    }
+}
