@@ -1,0 +1,46 @@
+@inherits LayoutComponentBase
+
+<Blazorise.ThemeProvider Theme="@theme">
+    <div class="page">
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+
+        <main>
+            <div class="top-row px-4">
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="user-info">
+                            <span class="welcome-text">Welcome, @context.User.Identity?.Name!</span>
+                            <form method="post" action="/Identity/Account/Logout">
+                                <button type="submit" class="btn btn-link">Logout</button>
+                            </form>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="/Identity/Account/Login">Login</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+    </div>
+</Blazorise.ThemeProvider>
+
+@code {
+    private Theme theme = new Theme
+    {
+        ColorOptions = new ThemeColorOptions
+        {
+            Primary = "#28a745",
+            Secondary = "#6c757d",
+            Success = "#28a745",
+            Info = "#17a2b8",
+            Warning = "#ffc107",
+            Danger = "#dc3545"
+        }
+    };
+}

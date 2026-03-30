@@ -1,0 +1,71 @@
+@implements IDisposable
+
+@if (AppState.IsAuthenticated)
+{
+    <div class="top-row ps-3 navbar navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="">Ledgr</a>
+            <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+        <ul class="nav flex-column">
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door" aria-hidden="true"></span> Dashboard
+                </NavLink>
+            </li>
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="transactions">
+                    <span class="bi bi-list-nested" aria-hidden="true"></span> Transactions
+                </NavLink>
+            </li>
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="transactions/add">
+                    <span class="bi bi-plus-circle" aria-hidden="true"></span> Add Transaction
+                </NavLink>
+            </li>
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="categories">
+                    <span class="bi bi-tags" aria-hidden="true"></span> Categories
+                </NavLink>
+            </li>
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="reports">
+                    <span class="bi bi-graph-up" aria-hidden="true"></span> Reports
+                </NavLink>
+            </li>
+        </ul>
+    </div>
+}
+
+@code {
+    private bool collapseNavMenu = true;
+
+    [Inject] private AuthenticationStateProvider AppState { get; set; } = null!;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    protected override void OnInitialized()
+    {
+        AppState.AuthenticationStateChanged += OnAuthenticationStateChanged;
+    }
+
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AppState.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
+}
