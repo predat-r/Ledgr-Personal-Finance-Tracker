@@ -1,0 +1,184 @@
+@page "/transactions/edit/{id:int}"
+
+@using Microsoft.AspNetCore.Authorization
+@using Blazorise
+
+@attribute [Authorize]
+
+<PageTitle>Edit Transaction - Ledgr</PageTitle>
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">Edit Transaction</h3>
+                </div>
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="loading-spinner">
+                            <Spinner Color="Primary" Size="Style.Width.Rem(3)" />
+                        </div>
+                    }
+                    else
+                    {
+                        <Validations Mode="ValidationMode.Auto" Model="@transaction" ValidateOnLoad="false">
+                            <Field>
+                                <FieldLabel>Description</FieldLabel>
+                                <TextEdit @bind-Text="transaction.Description" 
+                                         Placeholder="e.g., Grocery shopping">
+                                    <ValidationError>Description is required</ValidationError>
+                                </TextEdit>
+                            </Field>
+
+                            <Field>
+                                <FieldLabel>Amount</FieldLabel>
+                                <NumericEdit @bind-Value="transaction.Amount" 
+                                            Min="0.01" 
+                                            Step="0.01"
+                                            Placeholder="0.00" />
+                            </Field>
+
+                            <Field>
+                                <FieldLabel>Type</FieldLabel>
+                                <Select @bind-SelectedValue="transaction.Type" ValueChanged="OnTypeChanged">
+                                    <SelectItem Value="TransactionType.Expense">Expense</SelectItem>
+                                    <SelectItem Value="TransactionType.Income">Income</SelectItem>
+                                </Select>
+                            </Field>
+
+                            <Field>
+                                <FieldLabel>Category</FieldLabel>
+                                <Select @bind-SelectedValue="transaction.CategoryId">
+                                    <SelectItem Value="0">Select a category</SelectItem>
+                                    @foreach (var category in filteredCategories)
+                                    {
+                                        <SelectItem Value="category.Id">
+                                            <span class="category-dot" style="background-color: @category.Color"></span>
+                                            @category.Name
+                                        </SelectItem>
+                                    }
+                                </Select>
+                            </Field>
+
+                            <Field>
+                                <FieldLabel>Date</FieldLabel>
+                                <DateEdit @bind-Date="transaction.Date" />
+                            </Field>
+
+                            <Field>
+                                <FieldLabel>Notes (Optional)</FieldLabel>
+                                <TextArea @bind-Text="transaction.Notes" 
+                                         Rows="3" 
+                                         Placeholder="Any additional notes..." />
+                            </Field>
+
+                            <Field>
+                                <Check @bind-Checked="transaction.IsRecurring">
+                                    Recurring Transaction
+                                </Check>
+                            </Field>
+
+                            @if (transaction.IsRecurring)
+                            {
+                                <Field>
+                                    <FieldLabel>Recurring Until</FieldLabel>
+                                    <DateEdit @bind-Date="transaction.RecurringUntil" />
+                                </Field>
+                            }
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <Button Color="Color.Secondary" Clicked="Cancel">
+                                    <Icon Name="IconName.ArrowLeft" /> Cancel
+                                </Button>
+                                <Button Color="Color.Primary" Clicked="SaveTransaction" Loading="isSaving">
+                                    <Icon Name="IconName.Save" /> Save Changes
+                                </Button>
+                            </div>
+                        </Validations>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private ITransactionService TransactionService { get; set; } = null!;
+    [Inject] private ICategoryService CategoryService { get; set; } = null!;
+    [Inject] private AuthenticationStateProvider AuthState { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    [Parameter] public int Id { get; set; }
+
+    private Transaction? transaction;
+    private List<Category> categories = new();
+    private List<Category> filteredCategories = new();
+    private bool isLoading = true;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await CategoryService.GetAllCategoriesAsync();
+        
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            transaction = await TransactionService.GetTransactionByIdAsync(Id, userId);
+            
+            if (transaction == null)
+            {
+                Navigation.NavigateTo("/transactions");
+                return;
+            }
+
+            FilterCategories();
+        }
+
+        isLoading = false;
+    }
+
+    private void OnTypeChanged()
+    {
+        FilterCategories();
+    }
+
+    private void FilterCategories()
+    {
+        if (transaction == null) return;
+        
+        filteredCategories = categories.Where(c => c.Type == transaction.Type).ToList();
+        
+        if (!filteredCategories.Any(c => c.Id == transaction.CategoryId))
+        {
+            transaction.CategoryId = filteredCategories.FirstOrDefault()?.Id ?? 0;
+        }
+    }
+
+    private async Task SaveTransaction()
+    {
+        if (transaction == null || transaction.CategoryId == 0)
+            return;
+
+        isSaving = true;
+
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            await TransactionService.UpdateTransactionAsync(transaction);
+            Navigation.NavigateTo("/transactions");
+        }
+
+        isSaving = false;
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/transactions");
+    }
+}
